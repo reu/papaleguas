@@ -1,0 +1,25 @@
+[package]
+name = "papaleguas"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rodrigo Navarro <rnavarro@rnavarro.com.br>"]
+license = "MIT"
+description = "ACME client"
+repository = "https://github.com/reu/papaleguas"
+categories = ["asynchronous", "network-programming", "web-programming"]
+keywords = ["acme", "tls", "letsencrypt"]
+
+[dependencies]
+base64 = "0.13.0"
+bytes = "1.1.0"
+futures = "0.3.21"
+http = "0.2.7"
+openssl = "0.10.38"
+reqwest = { version = "0.11.10", features = ["json"] }
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.79"
+thiserror = "1.0.31"
+tokio = { version = "1.17.0", features = ["sync"] }
+
+[dev-dependencies]
+tokio = { version = "1.17.0", features = ["fs", "macros", "test-util"] }
