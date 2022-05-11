@@ -120,6 +120,10 @@ impl Challenge {
         &self.challenge.token
     }
 
+    pub fn key_authorization(&self) -> AcmeResult<String> {
+        Ok(self.account.key.authorize_token(self.token())?)
+    }
+
     pub async fn validate(self) -> AcmeResult<Self> {
         let res = self
             .acme

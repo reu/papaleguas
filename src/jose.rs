@@ -54,6 +54,11 @@ impl Key {
         Ok(utils::base64(signer.sign_to_vec()?))
     }
 
+    pub fn authorize_token(&self, token: &str) -> JoseResult<String> {
+        let fingerprint = utils::base64(self.jwk_digest()?);
+        Ok(format!("{token}.{fingerprint}"))
+    }
+
     pub(crate) fn alg(&self) -> String {
         match self {
             Key::Rsa(rsa) => format!("RS{}", rsa.size()),

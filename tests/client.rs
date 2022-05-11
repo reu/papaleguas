@@ -153,11 +153,13 @@ async fn test_generate_certificate_via_http01() -> TestResult {
         .send()
         .await?;
 
-    let key = account.key().clone();
+    let order = account
+        .new_order()
+        .dns("acme-http.example.org")
+        .send()
+        .await?;
 
-    let order = account.new_order().dns("acme.example.org").send().await?;
-
-    let http_challenge = order
+    let challenge = order
         .authorizations()
         .await?
         .first()
@@ -177,19 +179,85 @@ async fn test_generate_certificate_via_http01() -> TestResult {
 
     challenge_test_client
         .post("http://localhost:8055/add-http01")
-        .json({
-            let key = base64::encode_config(&key.jwk_digest()?, base64::URL_SAFE_NO_PAD);
-            let token = http_challenge.token();
-
-            &json!({
-                "token": http_challenge.token(),
-                "content": format!("{token}.{key}"),
-            })
-        })
+        .json(&json!({
+            "token": challenge.token(),
+            "content": challenge.key_authorization()?,
+        }))
         .send()
         .await?;
 
-    http_challenge.validate().await?;
+    challenge.validate().await?;
+
+    let _cert = loop {
+        let order = account.find_order(order.url()).await?;
+
+        match order.status() {
+            OrderStatus::Pending => {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
+            OrderStatus::Ready => {
+                let pkey = PKey::from_rsa(Rsa::generate(2048)?)?;
+                order.finalize(&pkey).await?;
+            }
+            OrderStatus::Processing => continue,
+            OrderStatus::Valid => break order.certificate().await?,
+            OrderStatus::Invalid => {
+                return Err("Invalid order".into());
+            }
+        }
+    };
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_generate_certificate_via_tlsalpn01() -> TestResult {
+    let acme = pebble_client().await?;
+
+    let account = acme
+        .new_account()
+        .with_auto_generated_rsa_key()
+        .contact("example@example.org")
+        .contact("owner@example.org")
+        .terms_of_service_agreed(true)
+        .only_return_existing(false)
+        .send()
+        .await?;
+
+    let order = account
+        .new_order()
+        .dns("acme-tls.example.org")
+        .send()
+        .await?;
+
+    let challenge = order
+        .authorizations()
+        .await?
+        .first()
+        .and_then(|auth| auth.tls_alpn01_challenge())
+        .ok_or("Challenge not found")?;
+
+    let challenge_test_client = reqwest::Client::new();
+
+    challenge_test_client
+        .post("http://localhost:8055/add-a")
+        .json(&json!({
+            "host": "acme-tls.example.org",
+            "addresses": ["10.30.50.3"],
+        }))
+        .send()
+        .await?;
+
+    challenge_test_client
+        .post("http://localhost:8055/add-tlsalpn01")
+        .json(&json!({
+            "host": "acme-tls.example.org",
+            "content": challenge.key_authorization()?,
+        }))
+        .send()
+        .await?;
+
+    challenge.validate().await?;
 
     let _cert = loop {
         let order = account.find_order(order.url()).await?;
