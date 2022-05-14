@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use account::{Account, NewAccountRequest};
+use account::NewAccountRequest;
 use api::DirectoryUrl;
 use bytes::Bytes;
 use error::AcmeResult;
@@ -11,8 +11,11 @@ use tokio::sync::Mutex;
 
 use self::api::Directory;
 
-pub use jose::Key;
-pub use order::OrderStatus;
+pub use account::*;
+pub use authorization::*;
+pub use error::*;
+pub use jose::*;
+pub use order::*;
 
 mod account;
 mod api;
