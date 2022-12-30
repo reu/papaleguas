@@ -4,7 +4,6 @@ use account::NewAccountRequest;
 use api::DirectoryUrl;
 use bytes::Bytes;
 use error::AcmeResult;
-use openssl::pkey::{PKey, Private};
 
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
@@ -194,10 +193,7 @@ impl AcmeClient {
         NewAccountRequest::new(self.inner.clone(), &self.directory().new_account)
     }
 
-    pub async fn account_from_private_key(
-        &self,
-        private_key: PKey<Private>,
-    ) -> AcmeResult<Account> {
+    pub async fn account_from_private_key(&self, private_key: jose::Key) -> AcmeResult<Account> {
         self.new_account()
             .private_key(private_key)
             .only_return_existing(true)

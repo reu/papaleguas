@@ -1,12 +1,5 @@
 use std::sync::Arc;
 
-use openssl::{
-    ec::{EcGroup, EcKey},
-    nid::Nid,
-    pkey::{PKey, Private},
-    rsa::Rsa,
-};
-
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -111,7 +104,7 @@ pub struct NewAccountRequest<'a> {
     #[serde(skip)]
     url: &'a str,
     #[serde(skip)]
-    private_key: Option<PKey<Private>>,
+    private_key: Option<jose::Key>,
     contacts: Vec<String>,
     terms_of_service_agreed: bool,
     only_return_existing: bool,
@@ -129,7 +122,7 @@ impl<'a> NewAccountRequest<'a> {
         }
     }
 
-    add_optional_field!(private_key, PKey<Private>);
+    add_optional_field!(private_key, jose::Key);
     add_field!(contacts, Vec<String>);
     add_field!(terms_of_service_agreed, bool);
     add_field!(only_return_existing, bool);
@@ -141,28 +134,22 @@ impl<'a> NewAccountRequest<'a> {
     }
 
     pub fn with_auto_generated_rsa_key(self) -> Self {
-        let private_key = Rsa::generate(2048).and_then(PKey::from_rsa).ok();
         Self {
-            private_key,
+            private_key: Some(jose::Key::random_rsa_key(rand::thread_rng())),
             ..self
         }
     }
 
     pub fn with_auto_generated_ec_key(self) -> Self {
-        let private_key = EcGroup::from_curve_name(Nid::SECP384R1)
-            .and_then(|group| EcKey::generate(&group))
-            .and_then(PKey::from_ec_key)
-            .ok();
-
         Self {
-            private_key,
+            private_key: Some(jose::Key::random_ec_key(rand::thread_rng())),
             ..self
         }
     }
 
     pub async fn send(self) -> AcmeResult<Account> {
         let payload = serde_json::to_value(&self)?;
-        let key = self.private_key.ok_or("Missing private key")?.try_into()?;
+        let key = self.private_key.ok_or("Missing private key")?;
 
         let res = self
             .acme

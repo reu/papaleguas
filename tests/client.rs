@@ -33,11 +33,12 @@ async fn test_directory_from_url() {
 #[tokio::test]
 async fn test_create_account() {
     let acme = pebble_client().await.unwrap();
-    let pkey = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
+    // let pkey = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
 
     let account = acme
         .new_account()
-        .private_key(pkey)
+        //.private_key(pkey)
+        .with_auto_generated_ec_key()
         .contact("example@example.org")
         .contact("owner@example.org")
         .terms_of_service_agreed(true)
@@ -68,11 +69,12 @@ async fn test_error() -> TestResult {
 #[tokio::test]
 async fn test_retrive_account() -> TestResult {
     let acme = pebble_client().await?;
-    let pkey = PKey::from_rsa(Rsa::generate(2048)?)?;
+    // let pkey = PKey::from_rsa(Rsa::generate(2048)?)?;
 
     let account = acme
         .new_account()
-        .private_key(pkey.clone())
+        //.private_key(pkey.clone())
+        .with_auto_generated_ec_key()
         .contact("example@example.org")
         .contact("owner@example.org")
         .terms_of_service_agreed(true)
@@ -80,7 +82,7 @@ async fn test_retrive_account() -> TestResult {
         .send()
         .await?;
 
-    let retrieved_account = acme.account_from_private_key(pkey).await?;
+    let retrieved_account = acme.account_from_private_key(account.key().clone()).await?;
 
     assert_eq!(account.kid(), retrieved_account.kid());
 
