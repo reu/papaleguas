@@ -1,16 +1,19 @@
 use p256::SecretKey as EcdsaPrivateKey;
-use pkcs8::{EncodePrivateKey, LineEnding};
+use pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding};
 use rand::{CryptoRng, Rng};
-use rsa::{pss::BlindedSigningKey, PublicKeyParts, RsaPrivateKey};
+use rsa::{PublicKeyParts, RsaPrivateKey};
 use serde_json::{json, Value as Json};
 use sha2::{Digest, Sha256};
-use signature::{RandomizedSigner, Signer};
+use signature::Signer;
 
 use crate::utils;
 
 #[derive(Debug, Clone)]
-pub enum Key {
-    Rsa(RsaPrivateKey),
+pub struct PrivateKey(Key);
+
+#[derive(Debug, Clone)]
+enum Key {
+    Rsa(Box<RsaPrivateKey>),
     Ec(EcdsaPrivateKey),
 }
 
@@ -22,27 +25,43 @@ pub enum PKeyError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum JoseError {
-    #[error(transparent)]
-    OpenSsl(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error("pkcs8 encoding error")]
+    Pkcs8Error(#[from] pkcs8::Error),
+
+    #[error("signature error {0}")]
+    SignatureError(String),
+
+    #[error("encoding error {0}")]
+    EncodingError(String),
+
+    #[error("decoding error {0}")]
+    DecodingError(String),
+}
+
+impl From<serde_json::Error> for JoseError {
+    fn from(err: serde_json::Error) -> Self {
+        JoseError::EncodingError(err.to_string())
+    }
 }
 
 type JoseResult<T> = Result<T, JoseError>;
 
-impl Key {
+impl PrivateKey {
     pub fn random_rsa_key(mut rng: impl Rng + CryptoRng) -> Self {
-       Key::Rsa(RsaPrivateKey::new(&mut rng, 2048).unwrap())
+        RsaPrivateKey::new(&mut rng, 2048).unwrap().into()
     }
 
     pub fn random_ec_key(rng: impl Rng + CryptoRng) -> Self {
-       Key::Ec(EcdsaPrivateKey::random(rng))
+        EcdsaPrivateKey::random(rng).into()
     }
 
-    pub fn sign(&self, buf: &[u8]) -> JoseResult<String> {
-        let signature = match self {
+    pub(crate) fn sign(&self, buf: &[u8]) -> JoseResult<String> {
+        let signature = match &self.0 {
             Key::Rsa(key) => {
-                let signing_key = BlindedSigningKey::<Sha256>::new(key.clone());
-                let signature = signing_key.sign_with_rng(rand::thread_rng(), buf);
-                signature.to_vec()
+                let hashed = Sha256::new().chain_update(buf).finalize();
+                let padding = rsa::PaddingScheme::new_pkcs1v15_sign::<Sha256>();
+                key.sign(padding, &hashed)
+                    .map_err(|err| JoseError::SignatureError(err.to_string()))?
             }
             Key::Ec(key) => {
                 let signing_key = ecdsa::SigningKey::from(key);
@@ -53,42 +72,112 @@ impl Key {
         Ok(utils::base64(signature))
     }
 
-    pub fn authorize_token(&self, token: &str) -> JoseResult<String> {
+    pub(crate) fn authorize_token(&self, token: &str) -> JoseResult<String> {
         let fingerprint = utils::base64(self.jwk_digest()?);
         Ok(format!("{token}.{fingerprint}"))
     }
 
     pub(crate) fn alg(&self) -> String {
-        match self {
-            Key::Rsa(_key) => format!("RS{}", 256),
-            Key::Ec(_) => "EC256".into(),
+        match &self.0 {
+            Key::Rsa(key) => format!("RS{}", key.n().to_bytes_be().len()),
+            Key::Ec(_) => "ES256".into(),
         }
     }
 
-    pub fn jwk(&self) -> JoseResult<Json> {
-        match self {
+    pub(crate) fn jwk(&self) -> JoseResult<Json> {
+        match &self.0 {
             Key::Rsa(rsa) => Ok(json!({
                 "e": utils::base64(rsa.e().to_bytes_be()),
                 "kty": "RSA",
                 "n": utils::base64(rsa.n().to_bytes_be()),
             })),
 
-            Key::Ec(ec) => Ok(serde_json::to_value(ec.to_jwk()).unwrap()),
+            Key::Ec(ec) => Ok(serde_json::to_value(ec.public_key().to_jwk())?),
         }
     }
 
-    pub fn jwk_digest(&self) -> JoseResult<[u8; 32]> {
+    pub(crate) fn jwk_digest(&self) -> JoseResult<[u8; 32]> {
         let digest = Sha256::new()
-            .chain_update(serde_json::to_vec(&self.jwk()?).unwrap())
+            .chain_update(serde_json::to_vec(&self.jwk()?)?)
             .finalize();
         Ok(digest.into())
     }
 
-    pub fn to_pem(&self) -> JoseResult<Vec<u8>> {
-        let pem = match self {
-            Key::Rsa(key) => key.to_pkcs8_pem(LineEnding::default()).unwrap(),
-            Key::Ec(key) => key.to_pkcs8_pem(LineEnding::default()).unwrap(),
+    pub fn from_pem(pem: &str) -> JoseResult<Self> {
+        if let Ok(key) = EcdsaPrivateKey::from_pkcs8_pem(pem) {
+            return Ok(key.into());
+        }
+
+        if let Ok(key) = RsaPrivateKey::from_pkcs8_pem(pem) {
+            return Ok(key.into());
+        }
+
+        Err(JoseError::DecodingError("Invalid PEM encoded key".into()))
+    }
+
+    pub fn from_der(der: &[u8]) -> JoseResult<Self> {
+        if let Ok(key) = EcdsaPrivateKey::from_pkcs8_der(der) {
+            return Ok(key.into());
+        }
+
+        if let Ok(key) = RsaPrivateKey::from_pkcs8_der(der) {
+            return Ok(key.into());
+        }
+
+        Err(JoseError::DecodingError("Invalid DER encoded key".into()))
+    }
+
+    pub fn to_pem(&self) -> JoseResult<String> {
+        let pem = match &self.0 {
+            Key::Rsa(key) => key.to_pkcs8_pem(LineEnding::default())?,
+            Key::Ec(key) => key.to_pkcs8_pem(LineEnding::default())?,
         };
-        Ok(pem.as_bytes().into())
+        Ok(pem.to_string())
+    }
+
+    pub fn to_der(&self) -> JoseResult<Vec<u8>> {
+        let der = match &self.0 {
+            Key::Rsa(key) => key.to_pkcs8_der()?,
+            Key::Ec(key) => key.to_pkcs8_der()?,
+        };
+        Ok(der.as_bytes().into())
+    }
+
+    pub(crate) fn csr(
+        &self,
+        domains: impl Into<Vec<String>>,
+    ) -> Result<Vec<u8>, rcgen::RcgenError> {
+        rcgen::Certificate::from_params({
+            let mut params = rcgen::CertificateParams::new(domains);
+            params.distinguished_name = rcgen::DistinguishedName::new();
+            params.key_pair = match &self.0 {
+                Key::Rsa(key) => Some(rcgen::KeyPair::from_der_and_sign_algo(
+                    key.to_pkcs8_der().unwrap().as_bytes(),
+                    &rcgen::PKCS_RSA_SHA256,
+                )?),
+                Key::Ec(key) => Some(rcgen::KeyPair::from_der_and_sign_algo(
+                    key.to_pkcs8_der().unwrap().as_bytes(),
+                    &rcgen::PKCS_ECDSA_P256_SHA256,
+                )?),
+            };
+            params.alg = match self.0 {
+                Key::Rsa(_) => &rcgen::PKCS_RSA_SHA256,
+                Key::Ec(_) => &rcgen::PKCS_ECDSA_P256_SHA256,
+            };
+            params
+        })
+        .and_then(|cert| cert.serialize_request_der())
+    }
+}
+
+impl From<RsaPrivateKey> for PrivateKey {
+    fn from(key: RsaPrivateKey) -> Self {
+        Self(Key::Rsa(Box::new(key)))
+    }
+}
+
+impl From<EcdsaPrivateKey> for PrivateKey {
+    fn from(key: EcdsaPrivateKey) -> Self {
+        Self(Key::Ec(key))
     }
 }

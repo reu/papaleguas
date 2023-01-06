@@ -38,12 +38,6 @@ impl From<jose::JoseError> for Error {
     }
 }
 
-impl From<openssl::error::ErrorStack> for Error {
-    fn from(err: openssl::error::ErrorStack) -> Self {
-        Self::Other(err.into())
-    }
-}
-
 impl From<std::str::Utf8Error> for Error {
     fn from(err: std::str::Utf8Error) -> Self {
         Self::Other(err.into())

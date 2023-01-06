@@ -19,7 +19,6 @@ pub use order::*;
 mod account;
 mod api;
 mod authorization;
-mod csr;
 mod error;
 mod jose;
 mod order;
@@ -29,7 +28,7 @@ mod utils;
 struct AcmeRequest<'a> {
     url: &'a str,
     kid: Option<&'a str>,
-    private_key: &'a jose::Key,
+    private_key: &'a jose::PrivateKey,
     payload: Option<Value>,
 }
 
@@ -53,6 +52,16 @@ pub struct AcmeClientBuilder {
 impl AcmeClientBuilder {
     pub fn http_client(self, http_client: reqwest::Client) -> Self {
         Self { http_client }
+    }
+
+    pub async fn build_lets_encrypt_staging(self) -> AcmeResult<AcmeClient> {
+        self.build_with_directory_url("https://acme-staging-v02.api.letsencrypt.org/directory")
+            .await
+    }
+
+    pub async fn build_lets_encrypt_production(self) -> AcmeResult<AcmeClient> {
+        self.build_with_directory_url("https://acme-v02.api.letsencrypt.org/directory")
+            .await
     }
 
     pub async fn build_with_directory_url(
@@ -193,7 +202,10 @@ impl AcmeClient {
         NewAccountRequest::new(self.inner.clone(), &self.directory().new_account)
     }
 
-    pub async fn account_from_private_key(&self, private_key: jose::Key) -> AcmeResult<Account> {
+    pub async fn existing_account_from_private_key(
+        &self,
+        private_key: jose::PrivateKey,
+    ) -> AcmeResult<Account> {
         self.new_account()
             .private_key(private_key)
             .only_return_existing(true)

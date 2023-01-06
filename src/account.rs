@@ -20,12 +20,17 @@ pub struct Account {
 pub(crate) struct AccountInner {
     pub(crate) acme: Arc<AcmeClientInner>,
     pub(crate) kid: String,
-    pub(crate) key: jose::Key,
+    pub(crate) key: jose::PrivateKey,
     pub(crate) account: api::Account,
 }
 
 impl Account {
-    fn new(acme: Arc<AcmeClientInner>, kid: String, key: jose::Key, account: api::Account) -> Self {
+    fn new(
+        acme: Arc<AcmeClientInner>,
+        kid: String,
+        key: jose::PrivateKey,
+        account: api::Account,
+    ) -> Self {
         Account {
             inner: Arc::new(AccountInner {
                 acme,
@@ -40,7 +45,7 @@ impl Account {
         self.inner.kid.as_str()
     }
 
-    pub fn key(&self) -> &jose::Key {
+    pub fn key(&self) -> &jose::PrivateKey {
         &self.inner.key
     }
 
@@ -104,8 +109,8 @@ pub struct NewAccountRequest<'a> {
     #[serde(skip)]
     url: &'a str,
     #[serde(skip)]
-    private_key: Option<jose::Key>,
-    contacts: Vec<String>,
+    private_key: Option<jose::PrivateKey>,
+    contacts: Vec<&'a str>,
     terms_of_service_agreed: bool,
     only_return_existing: bool,
 }
@@ -122,27 +127,27 @@ impl<'a> NewAccountRequest<'a> {
         }
     }
 
-    add_optional_field!(private_key, jose::Key);
-    add_field!(contacts, Vec<String>);
+    add_optional_field!(private_key, jose::PrivateKey);
+    add_field!(contacts, Vec<&'a str>);
     add_field!(terms_of_service_agreed, bool);
     add_field!(only_return_existing, bool);
 
-    pub fn contact(self, email: impl Into<String>) -> Self {
+    pub fn contact(self, email: &'a str) -> Self {
         let mut contacts = self.contacts;
-        contacts.push(email.into());
+        contacts.push(email);
         Self { contacts, ..self }
     }
 
     pub fn with_auto_generated_rsa_key(self) -> Self {
         Self {
-            private_key: Some(jose::Key::random_rsa_key(rand::thread_rng())),
+            private_key: Some(jose::PrivateKey::random_rsa_key(rand::thread_rng())),
             ..self
         }
     }
 
     pub fn with_auto_generated_ec_key(self) -> Self {
         Self {
-            private_key: Some(jose::Key::random_ec_key(rand::thread_rng())),
+            private_key: Some(jose::PrivateKey::random_ec_key(rand::thread_rng())),
             ..self
         }
     }
