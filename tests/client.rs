@@ -1,7 +1,7 @@
 use std::{error::Error, time::Duration};
 
-use openssl::{pkey::PKey, rsa::Rsa};
 use papaleguas::{AcmeClient, OrderStatus};
+use rand::thread_rng;
 use reqwest::Certificate;
 use serde_json::json;
 
@@ -33,11 +33,10 @@ async fn test_directory_from_url() {
 #[tokio::test]
 async fn test_create_account() {
     let acme = pebble_client().await.unwrap();
-    let pkey = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
 
     let account = acme
         .new_account()
-        .private_key(pkey)
+        .with_auto_generated_ec_key()
         .contact("example@example.org")
         .contact("owner@example.org")
         .terms_of_service_agreed(true)
@@ -54,7 +53,7 @@ async fn test_error() -> TestResult {
 
     let account = acme
         .new_account()
-        .with_auto_generated_rsa_key()
+        .with_auto_generated_ec_key()
         .terms_of_service_agreed(false)
         .only_return_existing(false)
         .send()
@@ -68,11 +67,10 @@ async fn test_error() -> TestResult {
 #[tokio::test]
 async fn test_retrive_account() -> TestResult {
     let acme = pebble_client().await?;
-    let pkey = PKey::from_rsa(Rsa::generate(2048)?)?;
 
     let account = acme
         .new_account()
-        .private_key(pkey.clone())
+        .with_auto_generated_ec_key()
         .contact("example@example.org")
         .contact("owner@example.org")
         .terms_of_service_agreed(true)
@@ -80,7 +78,9 @@ async fn test_retrive_account() -> TestResult {
         .send()
         .await?;
 
-    let retrieved_account = acme.account_from_private_key(pkey).await?;
+    let retrieved_account = acme
+        .existing_account_from_private_key(account.key().clone())
+        .await?;
 
     assert_eq!(account.kid(), retrieved_account.kid());
 
@@ -93,7 +93,7 @@ async fn test_order_list() -> TestResult {
 
     let account = acme
         .new_account()
-        .with_auto_generated_rsa_key()
+        .with_auto_generated_ec_key()
         .contact("example@example.org")
         .contact("owner@example.org")
         .terms_of_service_agreed(true)
@@ -120,7 +120,7 @@ async fn test_create_order() -> TestResult {
 
     let account = acme
         .new_account()
-        .with_auto_generated_rsa_key()
+        .with_auto_generated_ec_key()
         .contact("example@example.org")
         .contact("owner@example.org")
         .terms_of_service_agreed(true)
@@ -145,7 +145,7 @@ async fn test_generate_certificate_via_http01() -> TestResult {
 
     let account = acme
         .new_account()
-        .with_auto_generated_rsa_key()
+        .with_auto_generated_ec_key()
         .contact("example@example.org")
         .contact("owner@example.org")
         .terms_of_service_agreed(true)
@@ -196,7 +196,7 @@ async fn test_generate_certificate_via_http01() -> TestResult {
                 tokio::time::sleep(Duration::from_secs(3)).await;
             }
             OrderStatus::Ready => {
-                let pkey = PKey::from_rsa(Rsa::generate(2048)?)?;
+                let pkey = papaleguas::PrivateKey::random_ec_key(thread_rng());
                 order.finalize(&pkey).await?;
             }
             OrderStatus::Processing => continue,
@@ -216,7 +216,7 @@ async fn test_generate_certificate_via_tlsalpn01() -> TestResult {
 
     let account = acme
         .new_account()
-        .with_auto_generated_rsa_key()
+        .with_auto_generated_ec_key()
         .contact("example@example.org")
         .contact("owner@example.org")
         .terms_of_service_agreed(true)
@@ -259,6 +259,7 @@ async fn test_generate_certificate_via_tlsalpn01() -> TestResult {
 
     challenge.validate().await?;
 
+    let pkey = papaleguas::PrivateKey::random_ec_key(thread_rng());
     let _cert = loop {
         let order = account.find_order(order.url()).await?;
 
@@ -267,7 +268,6 @@ async fn test_generate_certificate_via_tlsalpn01() -> TestResult {
                 tokio::time::sleep(Duration::from_secs(3)).await;
             }
             OrderStatus::Ready => {
-                let pkey = PKey::from_rsa(Rsa::generate(2048)?)?;
                 order.finalize(&pkey).await?;
             }
             OrderStatus::Processing => continue,

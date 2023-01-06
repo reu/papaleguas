@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
 use futures::future::try_join_all;
-use openssl::pkey::{PKey, Private};
 use serde_json::json;
 
 use crate::{
     account::{Account, AccountInner},
     api,
     authorization::Authorization,
-    csr::generate_csr,
     error::AcmeResult,
+    jose,
     utils::{self, add_field},
     AcmeClientInner, AcmeRequest,
 };
@@ -72,15 +71,17 @@ impl Order {
         try_join_all(auths).await
     }
 
-    pub async fn finalize(self, private_key: &PKey<Private>) -> AcmeResult<Self> {
+    pub async fn finalize(self, private_key: &jose::PrivateKey) -> AcmeResult<Self> {
         let domains = self
             .order
             .identifiers
             .iter()
-            .map(|i| i.value.as_str())
-            .collect::<Vec<&str>>();
+            .map(|i| i.value.clone())
+            .collect::<Vec<_>>();
 
-        let csr = generate_csr(private_key, &domains)?;
+        let csr = private_key
+            .csr(domains)
+            .map_err(|_| "Failed to certificate signing request")?;
 
         let res = self
             .acme
@@ -88,7 +89,7 @@ impl Order {
                 url: &self.order.finalize,
                 kid: Some(&self.account.kid),
                 private_key: &self.account.key,
-                payload: Some(json!({ "csr": utils::base64(&csr.to_der()?) })),
+                payload: Some(json!({ "csr": utils::base64(&csr) })),
             })
             .await?;
 

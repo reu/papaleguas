@@ -1,3 +1,5 @@
+use base64ct::{Base64UrlUnpadded as Base64, Encoding};
+
 macro_rules! add_field {
     ($n:ident, $t:ty) => {
         pub fn $n<T: Into<$t>>(self, val: T) -> Self {
@@ -24,5 +26,5 @@ pub(crate) use add_field;
 pub(crate) use add_optional_field;
 
 pub fn base64<T: AsRef<[u8]>>(data: T) -> String {
-    base64::encode_config(data, base64::URL_SAFE_NO_PAD)
+    Base64::encode_string(data.as_ref())
 }
