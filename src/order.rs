@@ -9,7 +9,7 @@ use crate::{
     authorization::Authorization,
     error::AcmeResult,
     jose,
-    utils::{self, add_field},
+    utils::{add_field, base64},
     AcmeClientInner, AcmeRequest,
 };
 
@@ -89,7 +89,7 @@ impl Order {
                 url: &self.order.finalize,
                 kid: Some(&self.account.kid),
                 private_key: &self.account.key,
-                payload: Some(json!({ "csr": utils::base64(&csr) })),
+                payload: Some(json!({ "csr": base64(&csr) })),
             })
             .await?;
 

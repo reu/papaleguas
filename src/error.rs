@@ -26,12 +26,6 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-impl From<jose::PKeyError> for Error {
-    fn from(err: crate::jose::PKeyError) -> Self {
-        Self::Other(err.into())
-    }
-}
-
 impl From<jose::JoseError> for Error {
     fn from(err: jose::JoseError) -> Self {
         Self::Other(err.into())

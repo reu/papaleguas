@@ -25,6 +25,6 @@ macro_rules! add_optional_field {
 pub(crate) use add_field;
 pub(crate) use add_optional_field;
 
-pub fn base64<T: AsRef<[u8]>>(data: T) -> String {
+pub(crate) fn base64<T: AsRef<[u8]>>(data: T) -> String {
     Base64::encode_string(data.as_ref())
 }

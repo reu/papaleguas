@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use crate::error::AcmeResult;
-use crate::{account::AccountInner, api, AcmeClientInner, AcmeRequest};
+use crate::{account::AccountInner, api, error::AcmeResult, AcmeClientInner, AcmeRequest};
 
 pub use api::AuthorizationStatus;
 pub use api::ChallengeStatus;

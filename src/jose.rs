@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use p256::SecretKey as EcdsaPrivateKey;
 use pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding};
 use rand::{CryptoRng, Rng};
@@ -6,21 +8,15 @@ use serde_json::{json, Value as Json};
 use sha2::{Digest, Sha256};
 use signature::Signer;
 
-use crate::utils;
+use crate::utils::base64;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrivateKey(Key);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Key {
     Rsa(Box<RsaPrivateKey>),
     Ec(EcdsaPrivateKey),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum PKeyError {
-    #[error("unsupported key type: only RSA and EC keys are supported")]
-    UnsupportedKey,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -58,9 +54,9 @@ impl PrivateKey {
     pub(crate) fn sign(&self, buf: &[u8]) -> JoseResult<String> {
         let signature = match &self.0 {
             Key::Rsa(key) => {
-                let hashed = Sha256::new().chain_update(buf).finalize();
+                let digest = Sha256::new().chain_update(buf).finalize();
                 let padding = rsa::PaddingScheme::new_pkcs1v15_sign::<Sha256>();
-                key.sign(padding, &hashed)
+                key.sign(padding, &digest)
                     .map_err(|err| JoseError::SignatureError(err.to_string()))?
             }
             Key::Ec(key) => {
@@ -69,17 +65,16 @@ impl PrivateKey {
                 signature.to_vec()
             }
         };
-        Ok(utils::base64(signature))
+        Ok(base64(signature))
     }
 
     pub(crate) fn authorize_token(&self, token: &str) -> JoseResult<String> {
-        let fingerprint = utils::base64(self.jwk_digest()?);
-        Ok(format!("{token}.{fingerprint}"))
+        Ok(format!("{token}.{}", base64(self.jwk_digest()?)))
     }
 
     pub(crate) fn alg(&self) -> String {
         match &self.0 {
-            Key::Rsa(key) => format!("RS{}", key.n().to_bytes_be().len()),
+            Key::Rsa(key) => format!("RS{}", key.size()),
             Key::Ec(_) => "ES256".into(),
         }
     }
@@ -87,9 +82,9 @@ impl PrivateKey {
     pub(crate) fn jwk(&self) -> JoseResult<Json> {
         match &self.0 {
             Key::Rsa(rsa) => Ok(json!({
-                "e": utils::base64(rsa.e().to_bytes_be()),
+                "e": base64(rsa.e().to_bytes_be()),
                 "kty": "RSA",
-                "n": utils::base64(rsa.n().to_bytes_be()),
+                "n": base64(rsa.n().to_bytes_be()),
             })),
 
             Key::Ec(ec) => Ok(serde_json::to_value(ec.public_key().to_jwk())?),
@@ -179,5 +174,54 @@ impl From<RsaPrivateKey> for PrivateKey {
 impl From<EcdsaPrivateKey> for PrivateKey {
     fn from(key: EcdsaPrivateKey) -> Self {
         Self(Key::Ec(key))
+    }
+}
+
+impl FromStr for PrivateKey {
+    type Err = JoseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_pem(s)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_rsa_pem_encoding() {
+        let rng = rand::thread_rng();
+        let key = PrivateKey::random_rsa_key(rng);
+        let serialized = key.to_pem().unwrap();
+        let deserialized = PrivateKey::from_pem(&serialized).unwrap();
+        assert_eq!(key, deserialized);
+    }
+
+    #[test]
+    fn test_ec_pem_encoding() {
+        let rng = rand::thread_rng();
+        let key = PrivateKey::random_ec_key(rng);
+        let serialized = key.to_pem().unwrap();
+        let deserialized = PrivateKey::from_pem(&serialized).unwrap();
+        assert_eq!(key, deserialized);
+    }
+
+    #[test]
+    fn test_rsa_der_encoding() {
+        let rng = rand::thread_rng();
+        let key = PrivateKey::random_rsa_key(rng);
+        let serialized = key.to_der().unwrap();
+        let deserialized = PrivateKey::from_der(&serialized).unwrap();
+        assert_eq!(key, deserialized);
+    }
+
+    #[test]
+    fn test_ec_der_encoding() {
+        let rng = rand::thread_rng();
+        let key = PrivateKey::random_ec_key(rng);
+        let serialized = key.to_der().unwrap();
+        let deserialized = PrivateKey::from_der(&serialized).unwrap();
+        assert_eq!(key, deserialized);
     }
 }

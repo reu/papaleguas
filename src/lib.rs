@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
 use self::api::Directory;
+use self::utils::base64;
 
 pub use account::*;
 pub use authorization::*;
@@ -88,7 +89,7 @@ impl AcmeClientInner {
                 None
             };
 
-            let protected = utils::base64(
+            let protected = base64(
                 json!({
                     "alg": request.private_key.alg(),
                     "url": request.url,
@@ -99,7 +100,7 @@ impl AcmeClientInner {
                 .to_string(),
             );
 
-            let payload = utils::base64(
+            let payload = base64(
                 request
                     .payload
                     .as_ref()

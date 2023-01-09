@@ -172,7 +172,7 @@ impl<'a> NewAccountRequest<'a> {
             .and_then(|kid| kid.to_str().map(|kid| kid.to_owned()).ok())
             .ok_or("Failed to parse account key id")?;
 
-        let account = serde_json::from_slice::<api::Account>(&res.into_body())?;
+        let account = serde_json::from_slice(&res.into_body())?;
 
         Ok(Account::new(self.acme, kid, key, account))
     }
