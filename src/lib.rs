@@ -14,14 +14,14 @@ use self::utils::base64;
 pub use account::*;
 pub use authorization::*;
 pub use error::*;
-pub use jose::*;
+pub use key::*;
 pub use order::*;
 
 mod account;
 mod api;
 mod authorization;
 mod error;
-mod jose;
+mod key;
 mod order;
 mod utils;
 
@@ -29,7 +29,7 @@ mod utils;
 struct AcmeRequest<'a> {
     url: &'a str,
     kid: Option<&'a str>,
-    private_key: &'a jose::PrivateKey,
+    private_key: &'a key::PrivateKey,
     payload: Option<Value>,
 }
 
@@ -205,7 +205,7 @@ impl AcmeClient {
 
     pub async fn existing_account_from_private_key(
         &self,
-        private_key: jose::PrivateKey,
+        private_key: key::PrivateKey,
     ) -> AcmeResult<Account> {
         self.new_account()
             .private_key(private_key)

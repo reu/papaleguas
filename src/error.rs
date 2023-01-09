@@ -1,4 +1,4 @@
-use crate::{api, jose};
+use crate::{api, key};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -26,8 +26,8 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-impl From<jose::JoseError> for Error {
-    fn from(err: jose::JoseError) -> Self {
+impl From<key::KeyError> for Error {
+    fn from(err: key::KeyError) -> Self {
         Self::Other(err.into())
     }
 }

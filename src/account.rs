@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api,
     error::AcmeResult,
-    jose,
+    key,
     order::{NewOrderRequest, Order},
     utils::{add_field, add_optional_field},
     AcmeClientInner, AcmeRequest,
@@ -20,7 +20,7 @@ pub struct Account {
 pub(crate) struct AccountInner {
     pub(crate) acme: Arc<AcmeClientInner>,
     pub(crate) kid: String,
-    pub(crate) key: jose::PrivateKey,
+    pub(crate) key: key::PrivateKey,
     pub(crate) account: api::Account,
 }
 
@@ -28,7 +28,7 @@ impl Account {
     fn new(
         acme: Arc<AcmeClientInner>,
         kid: String,
-        key: jose::PrivateKey,
+        key: key::PrivateKey,
         account: api::Account,
     ) -> Self {
         Account {
@@ -45,7 +45,7 @@ impl Account {
         self.inner.kid.as_str()
     }
 
-    pub fn key(&self) -> &jose::PrivateKey {
+    pub fn key(&self) -> &key::PrivateKey {
         &self.inner.key
     }
 
@@ -109,7 +109,7 @@ pub struct NewAccountRequest<'a> {
     #[serde(skip)]
     url: &'a str,
     #[serde(skip)]
-    private_key: Option<jose::PrivateKey>,
+    private_key: Option<key::PrivateKey>,
     contacts: Vec<&'a str>,
     terms_of_service_agreed: bool,
     only_return_existing: bool,
@@ -127,7 +127,7 @@ impl<'a> NewAccountRequest<'a> {
         }
     }
 
-    add_optional_field!(private_key, jose::PrivateKey);
+    add_optional_field!(private_key, key::PrivateKey);
     add_field!(contacts, Vec<&'a str>);
     add_field!(terms_of_service_agreed, bool);
     add_field!(only_return_existing, bool);
@@ -140,14 +140,14 @@ impl<'a> NewAccountRequest<'a> {
 
     pub fn with_auto_generated_rsa_key(self) -> Self {
         Self {
-            private_key: Some(jose::PrivateKey::random_rsa_key(rand::thread_rng())),
+            private_key: Some(key::PrivateKey::random_rsa_key(rand::thread_rng())),
             ..self
         }
     }
 
     pub fn with_auto_generated_ec_key(self) -> Self {
         Self {
-            private_key: Some(jose::PrivateKey::random_ec_key(rand::thread_rng())),
+            private_key: Some(key::PrivateKey::random_ec_key(rand::thread_rng())),
             ..self
         }
     }

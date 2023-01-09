@@ -8,7 +8,7 @@ use crate::{
     api,
     authorization::Authorization,
     error::AcmeResult,
-    jose,
+    key,
     utils::{add_field, base64},
     AcmeClientInner, AcmeRequest,
 };
@@ -71,7 +71,7 @@ impl Order {
         try_join_all(auths).await
     }
 
-    pub async fn finalize(self, private_key: &jose::PrivateKey) -> AcmeResult<Self> {
+    pub async fn finalize(self, private_key: &key::PrivateKey) -> AcmeResult<Self> {
         let domains = self
             .order
             .identifiers

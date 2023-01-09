@@ -20,7 +20,7 @@ enum Key {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum JoseError {
+pub enum KeyError {
     #[error("pkcs8 encoding error")]
     Pkcs8Error(#[from] pkcs8::Error),
 
@@ -34,13 +34,13 @@ pub enum JoseError {
     DecodingError(String),
 }
 
-impl From<serde_json::Error> for JoseError {
+impl From<serde_json::Error> for KeyError {
     fn from(err: serde_json::Error) -> Self {
-        JoseError::EncodingError(err.to_string())
+        KeyError::EncodingError(err.to_string())
     }
 }
 
-type JoseResult<T> = Result<T, JoseError>;
+type Result<T> = std::result::Result<T, KeyError>;
 
 impl PrivateKey {
     pub fn random_rsa_key(mut rng: impl Rng + CryptoRng) -> Self {
@@ -51,13 +51,13 @@ impl PrivateKey {
         EcdsaPrivateKey::random(rng).into()
     }
 
-    pub(crate) fn sign(&self, buf: &[u8]) -> JoseResult<String> {
+    pub(crate) fn sign(&self, buf: &[u8]) -> Result<String> {
         let signature = match &self.0 {
             Key::Rsa(key) => {
                 let digest = Sha256::new().chain_update(buf).finalize();
                 let padding = rsa::PaddingScheme::new_pkcs1v15_sign::<Sha256>();
                 key.sign(padding, &digest)
-                    .map_err(|err| JoseError::SignatureError(err.to_string()))?
+                    .map_err(|err| KeyError::SignatureError(err.to_string()))?
             }
             Key::Ec(key) => {
                 let signing_key = ecdsa::SigningKey::from(key);
@@ -68,7 +68,7 @@ impl PrivateKey {
         Ok(base64(signature))
     }
 
-    pub(crate) fn authorize_token(&self, token: &str) -> JoseResult<String> {
+    pub(crate) fn authorize_token(&self, token: &str) -> Result<String> {
         Ok(format!("{token}.{}", base64(self.jwk_digest()?)))
     }
 
@@ -79,7 +79,7 @@ impl PrivateKey {
         }
     }
 
-    pub(crate) fn jwk(&self) -> JoseResult<Json> {
+    pub(crate) fn jwk(&self) -> Result<Json> {
         match &self.0 {
             Key::Rsa(rsa) => Ok(json!({
                 "e": base64(rsa.e().to_bytes_be()),
@@ -91,14 +91,14 @@ impl PrivateKey {
         }
     }
 
-    pub(crate) fn jwk_digest(&self) -> JoseResult<[u8; 32]> {
+    pub(crate) fn jwk_digest(&self) -> Result<[u8; 32]> {
         let digest = Sha256::new()
             .chain_update(serde_json::to_vec(&self.jwk()?)?)
             .finalize();
         Ok(digest.into())
     }
 
-    pub fn from_pem(pem: &str) -> JoseResult<Self> {
+    pub fn from_pem(pem: &str) -> Result<Self> {
         if let Ok(key) = EcdsaPrivateKey::from_pkcs8_pem(pem) {
             return Ok(key.into());
         }
@@ -107,10 +107,10 @@ impl PrivateKey {
             return Ok(key.into());
         }
 
-        Err(JoseError::DecodingError("Invalid PEM encoded key".into()))
+        Err(KeyError::DecodingError("Invalid PEM encoded key".into()))
     }
 
-    pub fn from_der(der: &[u8]) -> JoseResult<Self> {
+    pub fn from_der(der: &[u8]) -> Result<Self> {
         if let Ok(key) = EcdsaPrivateKey::from_pkcs8_der(der) {
             return Ok(key.into());
         }
@@ -119,10 +119,10 @@ impl PrivateKey {
             return Ok(key.into());
         }
 
-        Err(JoseError::DecodingError("Invalid DER encoded key".into()))
+        Err(KeyError::DecodingError("Invalid DER encoded key".into()))
     }
 
-    pub fn to_pem(&self) -> JoseResult<String> {
+    pub fn to_pem(&self) -> Result<String> {
         let pem = match &self.0 {
             Key::Rsa(key) => key.to_pkcs8_pem(LineEnding::default())?,
             Key::Ec(key) => key.to_pkcs8_pem(LineEnding::default())?,
@@ -130,7 +130,7 @@ impl PrivateKey {
         Ok(pem.to_string())
     }
 
-    pub fn to_der(&self) -> JoseResult<Vec<u8>> {
+    pub fn to_der(&self) -> Result<Vec<u8>> {
         let der = match &self.0 {
             Key::Rsa(key) => key.to_pkcs8_der()?,
             Key::Ec(key) => key.to_pkcs8_der()?,
@@ -141,7 +141,7 @@ impl PrivateKey {
     pub(crate) fn csr(
         &self,
         domains: impl Into<Vec<String>>,
-    ) -> Result<Vec<u8>, rcgen::RcgenError> {
+    ) -> std::result::Result<Vec<u8>, rcgen::RcgenError> {
         rcgen::Certificate::from_params({
             let mut params = rcgen::CertificateParams::new(domains);
             params.distinguished_name = rcgen::DistinguishedName::new();
@@ -178,9 +178,9 @@ impl From<EcdsaPrivateKey> for PrivateKey {
 }
 
 impl FromStr for PrivateKey {
-    type Err = JoseError;
+    type Err = KeyError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         Self::from_pem(s)
     }
 }
