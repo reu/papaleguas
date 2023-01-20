@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirectoryUrl(pub(crate) String);
 
 impl<T: AsRef<str>> From<T> for DirectoryUrl {

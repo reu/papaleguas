@@ -35,6 +35,7 @@ struct AcmeRequest<'a> {
 
 #[derive(Debug, Clone)]
 pub struct AcmeClient {
+    directory_url: DirectoryUrl,
     inner: Arc<AcmeClientInner>,
 }
 
@@ -69,9 +70,10 @@ impl AcmeClientBuilder {
         self,
         url: impl Into<DirectoryUrl>,
     ) -> AcmeResult<AcmeClient> {
-        let directory = self.http_client.get(url.into().0).send().await?;
+        let url = url.into();
+        let directory = self.http_client.get(&url.0).send().await?;
         let directory = directory.json::<Directory>().await?;
-        Ok(AcmeClient::new(directory, self.http_client))
+        Ok(AcmeClient::new(url, directory, self.http_client))
     }
 }
 
@@ -182,17 +184,22 @@ impl AcmeClient {
         let http = reqwest::Client::default();
         let directory = http.get(url.as_ref()).send().await?;
         let directory = directory.json::<Directory>().await?;
-        Ok(Self::new(directory, http))
+        Ok(Self::new(url.as_ref().into(), directory, http))
     }
 
-    fn new(directory: Directory, http: reqwest::Client) -> Self {
+    fn new(directory_url: DirectoryUrl, directory: Directory, http: reqwest::Client) -> Self {
         AcmeClient {
+            directory_url,
             inner: Arc::new(AcmeClientInner {
                 directory,
                 http,
                 next_nonce: Mutex::new(None),
             }),
         }
+    }
+
+    pub fn directory_url(&self) -> &str {
+        self.directory_url.0.as_str()
     }
 
     pub fn directory(&self) -> &Directory {
