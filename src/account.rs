@@ -7,7 +7,7 @@ use crate::{
     error::AcmeResult,
     key,
     order::{NewOrderRequest, Order},
-    utils::{add_field, add_optional_field},
+    utils::add_field,
     AcmeClientInner, AcmeRequest,
 };
 
@@ -127,10 +127,16 @@ impl<'a> NewAccountRequest<'a> {
         }
     }
 
-    add_optional_field!(private_key, key::PrivateKey);
     add_field!(contacts, Vec<&'a str>);
     add_field!(terms_of_service_agreed, bool);
     add_field!(only_return_existing, bool);
+
+    pub fn private_key(self, key: impl TryInto<key::PrivateKey>) -> Self {
+        Self {
+            private_key: key.try_into().ok(),
+            ..self
+        }
+    }
 
     pub fn contact(self, email: &'a str) -> Self {
         let mut contacts = self.contacts;

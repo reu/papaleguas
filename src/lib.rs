@@ -212,7 +212,7 @@ impl AcmeClient {
 
     pub async fn existing_account_from_private_key(
         &self,
-        private_key: key::PrivateKey,
+        private_key: impl TryInto<key::PrivateKey>,
     ) -> AcmeResult<Account> {
         self.new_account()
             .private_key(private_key)

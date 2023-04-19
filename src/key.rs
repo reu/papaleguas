@@ -177,6 +177,38 @@ impl From<EcdsaPrivateKey> for PrivateKey {
     }
 }
 
+impl TryFrom<&Vec<u8>> for PrivateKey {
+    type Error = KeyError;
+
+    fn try_from(value: &Vec<u8>) -> std::result::Result<Self, Self::Error> {
+        Self::from_der(&value[..])
+    }
+}
+
+impl TryFrom<&[u8]> for PrivateKey {
+    type Error = KeyError;
+
+    fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
+        Self::from_der(value)
+    }
+}
+
+impl TryFrom<&str> for PrivateKey {
+    type Error = KeyError;
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        Self::from_pem(value)
+    }
+}
+
+impl TryFrom<String> for PrivateKey {
+    type Error = KeyError;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        Self::from_pem(&value)
+    }
+}
+
 impl FromStr for PrivateKey {
     type Err = KeyError;
 
@@ -222,6 +254,28 @@ mod test {
         let key = PrivateKey::random_ec_key(rng);
         let serialized = key.to_der().unwrap();
         let deserialized = PrivateKey::from_der(&serialized).unwrap();
+        assert_eq!(key, deserialized);
+    }
+
+    #[test]
+    fn test_try_from_string() {
+        let rng = rand::thread_rng();
+        let key = PrivateKey::random_ec_key(rng);
+        let serialized = key.to_pem().unwrap();
+
+        let deserialized = PrivateKey::try_from(serialized.as_str()).unwrap();
+        assert_eq!(key, deserialized);
+
+        let deserialized = PrivateKey::try_from(serialized).unwrap();
+        assert_eq!(key, deserialized);
+    }
+
+    #[test]
+    fn test_try_from_byte_slice() {
+        let rng = rand::thread_rng();
+        let key = PrivateKey::random_ec_key(rng);
+        let serialized = key.to_der().unwrap();
+        let deserialized = PrivateKey::try_from(&serialized).unwrap();
         assert_eq!(key, deserialized);
     }
 }

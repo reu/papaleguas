@@ -1,6 +1,6 @@
 use std::{error::Error, time::Duration};
 
-use papaleguas::{AcmeClient, OrderStatus};
+use papaleguas::{AcmeClient, OrderStatus, PrivateKey};
 use rand::thread_rng;
 use reqwest::Certificate;
 use serde_json::json;
@@ -45,6 +45,37 @@ async fn test_create_account() {
         .await;
 
     assert!(account.is_ok());
+
+    let rng = rand::thread_rng();
+    let key = PrivateKey::random_ec_key(rng);
+    let account = acme
+        .new_account()
+        .private_key(key.clone())
+        .contact("example@example.org")
+        .terms_of_service_agreed(true)
+        .only_return_existing(false)
+        .send()
+        .await;
+    assert!(account.is_ok());
+    let account = account.unwrap();
+
+    let same_account = acme
+        .new_account()
+        .private_key(key.clone())
+        .contact("example@example.org")
+        .terms_of_service_agreed(true)
+        .only_return_existing(false)
+        .send()
+        .await;
+    assert!(same_account.is_ok());
+
+    assert_eq!(account.kid(), same_account.unwrap().kid());
+
+    let same_account = acme
+        .existing_account_from_private_key(key)
+        .await;
+    assert!(same_account.is_ok());
+    assert_eq!(account.kid(), same_account.unwrap().kid());
 }
 
 #[tokio::test]
