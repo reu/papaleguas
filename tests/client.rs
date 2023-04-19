@@ -71,9 +71,7 @@ async fn test_create_account() {
 
     assert_eq!(account.kid(), same_account.unwrap().kid());
 
-    let same_account = acme
-        .existing_account_from_private_key(key)
-        .await;
+    let same_account = acme.existing_account_from_private_key(key).await;
     assert!(same_account.is_ok());
     assert_eq!(account.kid(), same_account.unwrap().kid());
 }
