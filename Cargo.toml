@@ -20,6 +20,7 @@ elliptic-curve = { version = "0.12.3", features = ["jwk", "serde", "pem"] }
 futures = "0.3.21"
 http = "0.2.7"
 p256 = { version = "0.11.1", features = ["jwk"] }
+p384 = { version = "0.11.2", features = ["jwk"] }
 pkcs8 = "0.9.0"
 rand = "0.8.5"
 rcgen = "0.10.0"

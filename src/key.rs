@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
-use p256::SecretKey as EcdsaPrivateKey;
+use p256::SecretKey as Ec256;
+use p384::SecretKey as Ec384;
 use pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding};
 use rand::{CryptoRng, Rng};
 use rsa::{PublicKeyParts, RsaPrivateKey};
@@ -16,7 +17,8 @@ pub struct PrivateKey(Key);
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Key {
     Rsa(Box<RsaPrivateKey>),
-    Ec(EcdsaPrivateKey),
+    Ec256(Ec256),
+    Ec384(Ec384),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -48,7 +50,7 @@ impl PrivateKey {
     }
 
     pub fn random_ec_key(rng: impl Rng + CryptoRng) -> Self {
-        EcdsaPrivateKey::random(rng).into()
+        Ec256::random(rng).into()
     }
 
     pub(crate) fn sign(&self, buf: &[u8]) -> Result<String> {
@@ -59,7 +61,12 @@ impl PrivateKey {
                 key.sign(padding, &digest)
                     .map_err(|err| KeyError::SignatureError(err.to_string()))?
             }
-            Key::Ec(key) => {
+            Key::Ec256(key) => {
+                let signing_key = ecdsa::SigningKey::from(key);
+                let signature = signing_key.sign(buf);
+                signature.to_vec()
+            }
+            Key::Ec384(key) => {
                 let signing_key = ecdsa::SigningKey::from(key);
                 let signature = signing_key.sign(buf);
                 signature.to_vec()
@@ -75,7 +82,8 @@ impl PrivateKey {
     pub(crate) fn alg(&self) -> String {
         match &self.0 {
             Key::Rsa(key) => format!("RS{}", key.size()),
-            Key::Ec(_) => "ES256".into(),
+            Key::Ec256(_) => "ES256".into(),
+            Key::Ec384(_) => "ES384".into(),
         }
     }
 
@@ -87,7 +95,8 @@ impl PrivateKey {
                 "n": base64(rsa.n().to_bytes_be()),
             })),
 
-            Key::Ec(ec) => Ok(serde_json::to_value(ec.public_key().to_jwk())?),
+            Key::Ec256(ec) => Ok(serde_json::to_value(ec.public_key().to_jwk())?),
+            Key::Ec384(ec) => Ok(serde_json::to_value(ec.public_key().to_jwk())?),
         }
     }
 
@@ -99,7 +108,7 @@ impl PrivateKey {
     }
 
     pub fn from_pem(pem: &str) -> Result<Self> {
-        if let Ok(key) = EcdsaPrivateKey::from_pkcs8_pem(pem) {
+        if let Ok(key) = Ec256::from_pkcs8_pem(pem) {
             return Ok(key.into());
         }
 
@@ -111,7 +120,11 @@ impl PrivateKey {
     }
 
     pub fn from_der(der: &[u8]) -> Result<Self> {
-        if let Ok(key) = EcdsaPrivateKey::from_pkcs8_der(der) {
+        if let Ok(key) = Ec256::from_pkcs8_der(der) {
+            return Ok(key.into());
+        }
+
+        if let Ok(key) = Ec384::from_pkcs8_der(der) {
             return Ok(key.into());
         }
 
@@ -125,7 +138,8 @@ impl PrivateKey {
     pub fn to_pem(&self) -> Result<String> {
         let pem = match &self.0 {
             Key::Rsa(key) => key.to_pkcs8_pem(LineEnding::default())?,
-            Key::Ec(key) => key.to_pkcs8_pem(LineEnding::default())?,
+            Key::Ec256(key) => key.to_pkcs8_pem(LineEnding::default())?,
+            Key::Ec384(key) => key.to_pkcs8_pem(LineEnding::default())?,
         };
         Ok(pem.to_string())
     }
@@ -133,7 +147,8 @@ impl PrivateKey {
     pub fn to_der(&self) -> Result<Vec<u8>> {
         let der = match &self.0 {
             Key::Rsa(key) => key.to_pkcs8_der()?,
-            Key::Ec(key) => key.to_pkcs8_der()?,
+            Key::Ec256(key) => key.to_pkcs8_der()?,
+            Key::Ec384(key) => key.to_pkcs8_der()?,
         };
         Ok(der.as_bytes().into())
     }
@@ -150,14 +165,19 @@ impl PrivateKey {
                     key.to_pkcs8_der().unwrap().as_bytes(),
                     &rcgen::PKCS_RSA_SHA256,
                 )?),
-                Key::Ec(key) => Some(rcgen::KeyPair::from_der_and_sign_algo(
+                Key::Ec256(key) => Some(rcgen::KeyPair::from_der_and_sign_algo(
                     key.to_pkcs8_der().unwrap().as_bytes(),
                     &rcgen::PKCS_ECDSA_P256_SHA256,
+                )?),
+                Key::Ec384(key) => Some(rcgen::KeyPair::from_der_and_sign_algo(
+                    &key.to_sec1_der().unwrap(),
+                    &rcgen::PKCS_ECDSA_P384_SHA384,
                 )?),
             };
             params.alg = match self.0 {
                 Key::Rsa(_) => &rcgen::PKCS_RSA_SHA256,
-                Key::Ec(_) => &rcgen::PKCS_ECDSA_P256_SHA256,
+                Key::Ec256(_) => &rcgen::PKCS_ECDSA_P256_SHA256,
+                Key::Ec384(_) => &rcgen::PKCS_ECDSA_P384_SHA384,
             };
             params
         })
@@ -171,9 +191,15 @@ impl From<RsaPrivateKey> for PrivateKey {
     }
 }
 
-impl From<EcdsaPrivateKey> for PrivateKey {
-    fn from(key: EcdsaPrivateKey) -> Self {
-        Self(Key::Ec(key))
+impl From<Ec256> for PrivateKey {
+    fn from(key: Ec256) -> Self {
+        Self(Key::Ec256(key))
+    }
+}
+
+impl From<Ec384> for PrivateKey {
+    fn from(key: Ec384) -> Self {
+        Self(Key::Ec384(key))
     }
 }
 
@@ -277,5 +303,23 @@ mod test {
         let serialized = key.to_der().unwrap();
         let deserialized = PrivateKey::try_from(&serialized).unwrap();
         assert_eq!(key, deserialized);
+    }
+
+    #[test]
+    fn test_ec256_from_pkcs8_der() {
+        let mut rng = rand::thread_rng();
+        let key = Ec256::random(&mut rng);
+        let der = key.to_pkcs8_der().unwrap();
+        let pkey = PrivateKey::from_der(der.as_bytes()).unwrap();
+        assert_eq!(der.as_bytes(), pkey.to_der().unwrap());
+    }
+
+    #[test]
+    fn test_ec384_from_pkcs8_der() {
+        let mut rng = rand::thread_rng();
+        let key = Ec384::random(&mut rng);
+        let der = key.to_pkcs8_der().unwrap();
+        let pkey = PrivateKey::from_der(der.as_bytes()).unwrap();
+        assert_eq!(der.as_bytes(), pkey.to_der().unwrap());
     }
 }
