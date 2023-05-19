@@ -144,6 +144,7 @@ impl<'a> NewAccountRequest<'a> {
         Self { contacts, ..self }
     }
 
+    #[cfg(feature = "rsa")]
     pub fn with_auto_generated_rsa_key(self) -> Self {
         Self {
             private_key: Some(key::PrivateKey::random_rsa_key(rand::thread_rng())),
