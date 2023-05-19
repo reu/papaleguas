@@ -161,7 +161,7 @@ impl<'a> NewAccountRequest<'a> {
 
     pub async fn send(self) -> AcmeResult<Account> {
         let payload = serde_json::to_value(&self)?;
-        let key = self.private_key.ok_or("Missing private key")?;
+        let key = self.private_key.ok_or("Invalid private key")?;
 
         let res = self
             .acme
