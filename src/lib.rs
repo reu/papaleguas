@@ -51,19 +51,22 @@ pub struct AcmeClientBuilder {
     http_client: reqwest::Client,
 }
 
+pub const LETS_ENCRYPT_STAGING: &'static str =
+    "https://acme-staging-v02.api.letsencrypt.org/directory";
+
+pub const LETS_ENCRYPT_PRODUCTION: &'static str = "https://acme-v02.api.letsencrypt.org/directory";
+
 impl AcmeClientBuilder {
     pub fn http_client(self, http_client: reqwest::Client) -> Self {
         Self { http_client }
     }
 
     pub async fn build_lets_encrypt_staging(self) -> AcmeResult<AcmeClient> {
-        self.build_with_directory_url("https://acme-staging-v02.api.letsencrypt.org/directory")
-            .await
+        self.build_with_directory_url(LETS_ENCRYPT_STAGING).await
     }
 
     pub async fn build_lets_encrypt_production(self) -> AcmeResult<AcmeClient> {
-        self.build_with_directory_url("https://acme-v02.api.letsencrypt.org/directory")
-            .await
+        self.build_with_directory_url(LETS_ENCRYPT_PRODUCTION).await
     }
 
     pub async fn build_with_directory_url(
