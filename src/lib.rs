@@ -51,10 +51,8 @@ pub struct AcmeClientBuilder {
     http_client: reqwest::Client,
 }
 
-pub const LETS_ENCRYPT_STAGING: &'static str =
-    "https://acme-staging-v02.api.letsencrypt.org/directory";
-
-pub const LETS_ENCRYPT_PRODUCTION: &'static str = "https://acme-v02.api.letsencrypt.org/directory";
+pub const LETS_ENCRYPT_STAGING: &str = "https://acme-staging-v02.api.letsencrypt.org/directory";
+pub const LETS_ENCRYPT_PRODUCTION: &str = "https://acme-v02.api.letsencrypt.org/directory";
 
 impl AcmeClientBuilder {
     pub fn http_client(self, http_client: reqwest::Client) -> Self {
