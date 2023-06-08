@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use futures::future::try_join_all;
 use serde_json::json;
+use time::OffsetDateTime;
 
 use crate::{
     account::{Account, AccountInner},
@@ -32,16 +33,16 @@ impl Order {
         &self.order.status
     }
 
-    pub fn expires(&self) -> Option<&str> {
-        self.order.expires.as_deref()
+    pub fn expires(&self) -> Option<OffsetDateTime> {
+        self.order.expires
     }
 
-    pub fn not_before(&self) -> Option<&str> {
-        self.order.expires.as_deref()
+    pub fn not_before(&self) -> Option<OffsetDateTime> {
+        self.order.not_before
     }
 
-    pub fn not_after(&self) -> Option<&str> {
-        self.order.expires.as_deref()
+    pub fn not_after(&self) -> Option<OffsetDateTime> {
+        self.order.not_after
     }
 
     pub fn error(&self) -> Option<&api::ServerError> {

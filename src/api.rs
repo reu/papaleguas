@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_json::Value;
+use time::OffsetDateTime;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirectoryUrl(pub(crate) String);
@@ -47,10 +48,13 @@ pub struct Identifier {
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     pub status: OrderStatus,
-    pub expires: Option<String>,
+    #[serde(default, with = "time::serde::iso8601::option")]
+    pub expires: Option<OffsetDateTime>,
     pub identifiers: Vec<Identifier>,
-    pub not_before: Option<String>,
-    pub not_after: Option<String>,
+    #[serde(default, with = "time::serde::iso8601::option")]
+    pub not_before: Option<OffsetDateTime>,
+    #[serde(default, with = "time::serde::iso8601::option")]
+    pub not_after: Option<OffsetDateTime>,
     pub error: Option<ServerError>,
     pub authorizations: Vec<String>,
     pub finalize: String,
@@ -71,7 +75,8 @@ pub enum OrderStatus {
 pub struct Authorization {
     pub identifier: Identifier,
     pub status: AuthorizationStatus,
-    pub expires: Option<String>,
+    #[serde(default, with = "time::serde::iso8601::option")]
+    pub expires: Option<OffsetDateTime>,
     pub challenges: Vec<Challenge>,
     pub wildcard: Option<bool>,
 }

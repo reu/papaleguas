@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
+use time::OffsetDateTime;
 
 use crate::{account::AccountInner, api, error::AcmeResult, AcmeClientInner, AcmeRequest};
 
@@ -19,8 +20,8 @@ impl Authorization {
         &self.authorization.status
     }
 
-    pub fn expires(&self) -> Option<&str> {
-        self.authorization.expires.as_deref()
+    pub fn expires(&self) -> Option<OffsetDateTime> {
+        self.authorization.expires
     }
 
     pub fn wildcard(&self) -> bool {
