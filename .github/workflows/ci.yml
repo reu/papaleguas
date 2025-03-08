@@ -33,7 +33,7 @@ jobs:
       - name: Start pebble
         run: |
           pushd tests/pebble
-          docker-compose up -d
+          docker compose up -d
           popd
       - uses: actions-rs/cargo@v1
         with:

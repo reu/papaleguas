@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
-use account::NewAccountRequest;
 use api::DirectoryUrl;
 use bytes::Bytes;
-use error::AcmeResult;
 
 use serde_json::{json, Value};
 use tokio::sync::Mutex;

@@ -46,6 +46,20 @@ async fn test_create_account() {
 
     assert!(account.is_ok());
 
+    #[cfg(feature = "rsa")]
+    let account = acme
+        .new_account()
+        .with_auto_generated_rsa_key()
+        .contact("example@example.org")
+        .contact("owner@example.org")
+        .terms_of_service_agreed(true)
+        .only_return_existing(false)
+        .send()
+        .await;
+
+    #[cfg(feature = "rsa")]
+    assert!(account.is_ok());
+
     let rng = rand::thread_rng();
     let key = PrivateKey::random_ec_key(rng);
     let account = acme

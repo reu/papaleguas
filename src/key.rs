@@ -6,9 +6,11 @@ use p384::SecretKey as Ec384;
 use pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding};
 use rand::{CryptoRng, Rng};
 #[cfg(feature = "rsa")]
-use rsa::{PublicKeyParts, RsaPrivateKey};
+use rsa::{traits::PublicKeyParts, RsaPrivateKey};
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
+#[cfg(feature = "rsa")]
+use signature::SignatureEncoding;
 use signature::Signer;
 
 use crate::utils::base64;
@@ -54,32 +56,30 @@ impl PrivateKey {
         RsaPrivateKey::new(&mut rng, 2048).unwrap().into()
     }
 
-    pub fn random_ec_key(rng: impl Rng + CryptoRng) -> Self {
-        Ec256::random(rng).into()
+    pub fn random_ec_key(mut rng: impl Rng + CryptoRng) -> Self {
+        Ec256::random(&mut rng).into()
     }
 
     pub(crate) fn sign(&self, buf: &[u8]) -> Result<String> {
-        let signature = match &self.0 {
+        match &self.0 {
             #[cfg(feature = "rsa")]
             Key::Rsa(key) => {
-                let digest = Sha256::new().chain_update(buf).finalize();
-                let padding = rsa::PaddingScheme::new_pkcs1v15_sign::<Sha256>();
-                key.sign(padding, &digest)
-                    .map_err(|err| KeyError::SignatureError(err.to_string()))?
+                let signing_key = rsa::pkcs1v15::SigningKey::<Sha256>::new(*key.clone());
+                let signature: rsa::pkcs1v15::Signature = signing_key.sign(buf);
+                Ok(base64(signature.to_bytes()))
             }
             Key::Ec256(key) => {
                 let signing_key = ecdsa::SigningKey::from(key);
-                let signature = signing_key.sign(buf);
-                signature.to_vec()
+                let signature: ecdsa::Signature<p256::NistP256> = signing_key.sign(buf);
+                Ok(base64(signature.to_bytes()))
             }
             #[cfg(feature = "p384")]
             Key::Ec384(key) => {
                 let signing_key = ecdsa::SigningKey::from(key);
-                let signature = signing_key.sign(buf);
-                signature.to_vec()
+                let signature: ecdsa::Signature<p384::NistP384> = signing_key.sign(buf);
+                Ok(base64(signature.to_bytes()))
             }
-        };
-        Ok(base64(signature))
+        }
     }
 
     pub(crate) fn authorize_token(&self, token: &str) -> Result<String> {
